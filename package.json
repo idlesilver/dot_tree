@@ -1,0 +1,81 @@
+{
+  "name": "dot_tree",
+  "displayName": "dot_tree",
+  "description": "Maintain directory-tree text with automatic prefixes and Enter/Tab helpers.",
+  "version": "0.0.1",
+  "publisher": "idlesilver",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": ["Other"],
+  "activationEvents": [
+    "onCommand:dot_tree.indent",
+    "onCommand:dot_tree.outdent",
+    "onCommand:dot_tree.newline",
+    "onStartupFinished"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      { "command": "dot_tree.indent", "title": "Dot Tree: Indent (maintain prefixes)" },
+      { "command": "dot_tree.outdent", "title": "Dot Tree: Outdent (maintain prefixes)" },
+      { "command": "dot_tree.newline", "title": "Dot Tree: New Line (same level)" }
+    ],
+    "languages": [
+      {
+        "id": "tree",
+        "aliases": ["Tree", "tree"],
+        "extensions": [".tree"]
+      }
+    ],
+    "grammars": [
+      {
+        "language": "tree",
+        "scopeName": "source.tree",
+        "path": "./syntaxes/tree.tmLanguage.json"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "dot_tree.indent",
+        "key": "tab",
+        "when": "editorTextFocus && dot_tree.activeTreeLine && !suggestWidgetVisible && !inlineSuggestionVisible"
+      },
+      {
+        "command": "dot_tree.outdent",
+        "key": "shift+tab",
+        "when": "editorTextFocus && dot_tree.activeTreeLine"
+      },
+      {
+        "command": "dot_tree.newline",
+        "key": "enter",
+        "when": "editorTextFocus && dot_tree.activeTreeLine"
+      }
+    ],
+    "configuration": {
+      "title": "dot_tree",
+      "properties": {
+        "dot_tree.style": {
+          "type": "string",
+          "enum": ["unicode", "ascii"],
+          "default": "unicode",
+          "description": "Tree prefix style to emit after normalization."
+        },
+        "dot_tree.indentSubtreeOnSingleCursor": {
+          "type": "boolean",
+          "default": true,
+          "description": "When there's no selection, indent/outdent the current line plus its subtree."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run build",
+    "build": "tsc -p .",
+    "watch": "tsc -watch -p ."
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.85.0",
+    "typescript": "^5.4.5"
+  }
+}

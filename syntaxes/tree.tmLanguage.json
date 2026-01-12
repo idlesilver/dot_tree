@@ -1,0 +1,10 @@
+{
+  "name": "Tree",
+  "scopeName": "source.tree",
+  "patterns": [
+    {
+      "name": "comment.line.number-sign.tree",
+      "match": "#.*$"
+    }
+  ]
+}
