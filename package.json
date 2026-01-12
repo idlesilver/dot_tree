@@ -2,8 +2,9 @@
   "name": "dottree",
   "displayName": "dottree",
   "description": "Maintain directory-tree text with automatic prefixes and Enter/Tab helpers.",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "publisher": "idlesilver",
+  "icon": "images/icon.png",
   "repository": {
     "type": "git",
     "url": "https://github.com/idlesilver/dottree.git"
