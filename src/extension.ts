@@ -10,6 +10,47 @@ type NodeLine = {
 
 let isApplyingEdit = false;
 
+type DecorationSet = {
+  prefixes: vscode.TextEditorDecorationType;
+  folders: vscode.TextEditorDecorationType;
+  files?: vscode.TextEditorDecorationType;
+};
+
+function parseDecorationColor(
+  value: string | null | undefined
+): vscode.ThemeColor | string | undefined {
+  if (!value) return undefined;
+  if (value.startsWith("theme:")) {
+    return new vscode.ThemeColor(value.slice("theme:".length));
+  }
+  return value;
+}
+
+function buildDecorationSet(): DecorationSet {
+  const cfg = vscode.workspace.getConfiguration("dottree");
+  const prefixColor = parseDecorationColor(
+    cfg.get<string | null>("prefixColor", "theme:editorWhitespace.foreground")
+  );
+  const folderColor = parseDecorationColor(
+    cfg.get<string | null>("folderColor", "#F2994A")
+  );
+  const fileColor = parseDecorationColor(cfg.get<string | null>("fileColor", null));
+
+  const prefixes = vscode.window.createTextEditorDecorationType({
+    color: prefixColor,
+  });
+  const folders = vscode.window.createTextEditorDecorationType({
+    color: folderColor,
+    fontWeight: "bold",
+  });
+
+  const files = fileColor
+    ? vscode.window.createTextEditorDecorationType({ color: fileColor })
+    : undefined;
+
+  return { prefixes, folders, files };
+}
+
 function getConfigStyle(): Style {
   const cfg = vscode.workspace.getConfiguration("dottree");
   return (cfg.get<string>("style", "unicode") as Style) ?? "unicode";
@@ -528,9 +569,35 @@ async function insertSiblingLine(editor: vscode.TextEditor) {
     return;
   }
 
-  const { i1 } = subtreeRange(nodes, idx);
-  const insertIndex = i1 + 1;
-  nodes.splice(insertIndex, 0, { lineNo: -1, depth: nodes[idx].depth, text: "" });
+  const lineText = doc.lineAt(around).text;
+  const trimmedRightLen = lineText.replace(/\s+$/, "").length;
+  let didSplit = false;
+  let insertIndex = -1;
+  if (
+    treeCols &&
+    sel.active.character > treeCols.payloadStart &&
+    sel.active.character < trimmedRightLen
+  ) {
+    const leftText = lineText
+      .slice(treeCols.payloadStart, sel.active.character)
+      .replace(/\s+$/, "");
+    const rightText = lineText
+      .slice(sel.active.character, trimmedRightLen)
+      .replace(/^\s+/, "");
+    if (rightText.length > 0) {
+      const { i1 } = subtreeRange(nodes, idx);
+      nodes[idx].text = leftText;
+      insertIndex = i1 + 1;
+      nodes.splice(insertIndex, 0, { lineNo: -1, depth: nodes[idx].depth, text: rightText });
+      didSplit = true;
+    }
+  }
+
+  if (!didSplit) {
+    const { i1 } = subtreeRange(nodes, idx);
+    insertIndex = i1 + 1;
+    nodes.splice(insertIndex, 0, { lineNo: -1, depth: nodes[idx].depth, text: "" });
+  }
 
   const style = getConfigStyle();
   const formatted = formatNodes(nodes, style);
@@ -622,32 +689,23 @@ function buildTreeFoldingRanges(doc: vscode.TextDocument): vscode.FoldingRange[]
 
 export function activate(context: vscode.ExtensionContext) {
   const docLineCounts = new Map<string, number>();
-  const prefixDecoration = vscode.window.createTextEditorDecorationType({
-    color: new vscode.ThemeColor("editorWhitespace.foreground"),
-  });
-  const folderDecoration = vscode.window.createTextEditorDecorationType({
-    color: "#F2994A",
-    fontWeight: "bold",
-  });
-  const fileDecoration = vscode.window.createTextEditorDecorationType({
-    color: "#ffffff",
-  });
+  let decorations = buildDecorationSet();
 
   const updateDecorations = (editor?: vscode.TextEditor) => {
     const active = editor ?? vscode.window.activeTextEditor;
     if (!active) return;
     if (!isTreeDocument(active.document) && !isMarkdownDocument(active.document)) {
-      active.setDecorations(prefixDecoration, []);
-      active.setDecorations(folderDecoration, []);
-      active.setDecorations(fileDecoration, []);
+      active.setDecorations(decorations.prefixes, []);
+      active.setDecorations(decorations.folders, []);
+      if (decorations.files) active.setDecorations(decorations.files, []);
       return;
     }
     const { prefixes, folders, files } = isMarkdownDocument(active.document)
       ? collectTreeDecorationsForMarkdown(active.document)
       : collectTreeDecorations(active.document);
-    active.setDecorations(prefixDecoration, prefixes);
-    active.setDecorations(folderDecoration, folders);
-    active.setDecorations(fileDecoration, files);
+    active.setDecorations(decorations.prefixes, prefixes);
+    active.setDecorations(decorations.folders, folders);
+    if (decorations.files) active.setDecorations(decorations.files, files);
   };
 
   // Update context key so Tab/Shift+Tab only override on tree lines
@@ -702,6 +760,24 @@ export function activate(context: vscode.ExtensionContext) {
     }),
   );
 
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeConfiguration((e) => {
+      if (!e.affectsConfiguration("dottree")) return;
+      decorations.prefixes.dispose();
+      decorations.folders.dispose();
+      decorations.files?.dispose();
+      decorations = buildDecorationSet();
+      updateDecorations(vscode.window.activeTextEditor);
+    })
+  );
+  context.subscriptions.push({
+    dispose: () => {
+      decorations.prefixes.dispose();
+      decorations.folders.dispose();
+      decorations.files?.dispose();
+    },
+  });
+
   updateContext();
   updateDecorations(vscode.window.activeTextEditor);
 
@@ -715,9 +791,6 @@ export function activate(context: vscode.ExtensionContext) {
         provideFoldingRanges: (document) => buildTreeFoldingRanges(document),
       }
     ),
-    prefixDecoration,
-    folderDecoration,
-    fileDecoration,
     vscode.languages.registerCompletionItemProvider(
       [{ scheme: "file" }, { scheme: "untitled" }],
       {

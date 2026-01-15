@@ -2,7 +2,7 @@
   "name": "dottree",
   "displayName": "dottree",
   "description": "Maintain directory-tree text with automatic prefixes and Enter/Tab helpers.",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "publisher": "idlesilver",
   "icon": "images/icon.png",
   "repository": {
@@ -74,6 +74,21 @@
           "type": "boolean",
           "default": true,
           "description": "When there's no selection, indent/outdent the current line plus its subtree."
+        },
+        "dottree.prefixColor": {
+          "type": "string",
+          "default": "theme:editorWhitespace.foreground",
+          "description": "Color for tree prefixes. Use a hex color or theme token like 'theme:editorWhitespace.foreground'."
+        },
+        "dottree.folderColor": {
+          "type": "string",
+          "default": "#F2994A",
+          "description": "Color for folder names."
+        },
+        "dottree.fileColor": {
+          "type": ["string", "null"],
+          "default": null,
+          "description": "Color for file names. Null means no special highlight."
         }
       }
     }
