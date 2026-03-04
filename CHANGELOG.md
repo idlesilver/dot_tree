@@ -1,7 +1,11 @@
 # Changelog
 
+## 0.0.4
+- Document `editor.tokenColorCustomizations.textMateRules` as the supported way to customize tree highlight colors.
+- Clarify that tree highlighting is theme-driven through Tree TextMate scopes.
+
 ## 0.0.3
-- Make prefix/folder/file highlight colors configurable; file highlight is off by default.
+- Move tree highlighting to grammar-based scopes for more stable triggering.
 - Split line content on Enter when cursor is in the middle of a tree item.
 
 ## 0.0.2
@@ -13,4 +17,3 @@
 - Tree editing helpers (Tab/Shift+Tab/Enter).
 - Snippet insertion with `|`.
 - Tree highlighting, comments, and folding.
-- Markdown `tree` code block highlighting.

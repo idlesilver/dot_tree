@@ -3,8 +3,40 @@
   "scopeName": "source.tree",
   "patterns": [
     {
-      "name": "comment.line.number-sign.tree",
-      "match": "#.*$"
+      "match": "^(\\s*#.*)$",
+      "captures": {
+        "1": {
+          "name": "comment.line.number-sign.tree"
+        }
+      }
+    },
+    {
+      "match": "^((?:(?:│  |\\|  |   )*(?:├─ |└─ |\\|- |\\\\- |\\+-- |`-- ))?)([^#\\n]*?/)(\\s+#.*)?$",
+      "captures": {
+        "1": {
+          "name": "punctuation.definition.tree"
+        },
+        "2": {
+          "name": "entity.name.namespace.tree"
+        },
+        "3": {
+          "name": "comment.line.number-sign.tree"
+        }
+      }
+    },
+    {
+      "match": "^((?:(?:│  |\\|  |   )*(?:├─ |└─ |\\|- |\\\\- |\\+-- |`-- ))?)([^#\\n][^#\\n]*?)(\\s+#.*)?$",
+      "captures": {
+        "1": {
+          "name": "punctuation.definition.tree"
+        },
+        "2": {
+          "name": "string.unquoted.filename.tree"
+        },
+        "3": {
+          "name": "comment.line.number-sign.tree"
+        }
+      }
     }
   ]
 }

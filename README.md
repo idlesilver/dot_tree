@@ -1,16 +1,16 @@
 # dottree
 
-Maintain directory-tree text with automatic prefixes, colors, and folding.
+Maintain Tree files with automatic prefixes, syntax highlighting, and folding.
 
 ## Features
 
 - Maintain tree prefixes while indenting/outdenting (Tab/Shift+Tab).
 - Insert a sibling line with Enter.
 - Snippet: type `|` to insert a starter tree.
-- Highlight prefixes, folders, and files (folders are orange + bold; files white).
+- Highlight prefixes, folders, files, and comments through the Tree grammar in `Tree` files.
 - `#` comments supported (uses theme comment color).
 - Folding for subtrees (triangle gutter, like code folding).
-- Works in `.tree` files and in Markdown code fences (`tree`).
+- Works in `.tree` files and files whose language mode is `Tree`.
 
 ## Quick Start
 
@@ -35,18 +35,6 @@ project_root/
 └─ README.md # note
 ```
 
-## Markdown Support
-
-Use fenced code blocks with language `tree`:
-
-````markdown
-```tree
-├─ src/
-│  └─ app/
-└─ README.md
-```
-````
-
 ## Commands
 
 - `Dot Tree: Indent (maintain prefixes)`
@@ -62,6 +50,54 @@ Use fenced code blocks with language `tree`:
 
 - `dottree.style`: `unicode` or `ascii` (default `unicode`)
 - `dottree.indentSubtreeOnSingleCursor`: indent/outdent subtree on single cursor (default `true`)
+
+## Highlight Customization
+
+Highlighting now comes from TextMate scopes, so colors are controlled by the active theme or `editor.tokenColorCustomizations`, not by extension settings.
+
+Use `textMateRules` directly. The generic shortcut fields such as `comments` or `strings` will not target these tree-specific scopes.
+
+- Prefixes: `punctuation.definition.tree`
+- Folders: `entity.name.namespace.tree`
+- Files: `string.unquoted.filename.tree`
+- Comments: `comment.line.number-sign.tree`
+
+Example `settings.json`:
+
+```json
+{
+  "editor.tokenColorCustomizations": {
+    "textMateRules": [
+      {
+        "scope": "punctuation.definition.tree",
+        "settings": {
+          "foreground": "#6b7280"
+        }
+      },
+      {
+        "scope": "entity.name.namespace.tree",
+        "settings": {
+          "foreground": "#f2994a",
+          "fontStyle": "bold"
+        }
+      },
+      {
+        "scope": "string.unquoted.filename.tree",
+        "settings": {
+          "foreground": "#e5e7eb"
+        }
+      },
+      {
+        "scope": "comment.line.number-sign.tree",
+        "settings": {
+          "foreground": "#94a3b8",
+          "fontStyle": "italic"
+        }
+      }
+    ]
+  }
+}
+```
 
 ## License
 

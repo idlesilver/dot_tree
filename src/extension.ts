@@ -4,52 +4,16 @@ type Style = "unicode" | "ascii";
 
 type NodeLine = {
   lineNo: number;
-  depth: number;       // nesting level
-  text: string;        // payload after prefixes
+  depth: number;
+  text: string;
 };
 
 let isApplyingEdit = false;
 
-type DecorationSet = {
-  prefixes: vscode.TextEditorDecorationType;
-  folders: vscode.TextEditorDecorationType;
-  files?: vscode.TextEditorDecorationType;
-};
-
-function parseDecorationColor(
-  value: string | null | undefined
-): vscode.ThemeColor | string | undefined {
-  if (!value) return undefined;
-  if (value.startsWith("theme:")) {
-    return new vscode.ThemeColor(value.slice("theme:".length));
-  }
-  return value;
-}
-
-function buildDecorationSet(): DecorationSet {
-  const cfg = vscode.workspace.getConfiguration("dottree");
-  const prefixColor = parseDecorationColor(
-    cfg.get<string | null>("prefixColor", "theme:editorWhitespace.foreground")
-  );
-  const folderColor = parseDecorationColor(
-    cfg.get<string | null>("folderColor", "#F2994A")
-  );
-  const fileColor = parseDecorationColor(cfg.get<string | null>("fileColor", null));
-
-  const prefixes = vscode.window.createTextEditorDecorationType({
-    color: prefixColor,
-  });
-  const folders = vscode.window.createTextEditorDecorationType({
-    color: folderColor,
-    fontWeight: "bold",
-  });
-
-  const files = fileColor
-    ? vscode.window.createTextEditorDecorationType({ color: fileColor })
-    : undefined;
-
-  return { prefixes, folders, files };
-}
+const TREE_DOCUMENT_SELECTOR: vscode.DocumentSelector = [
+  { language: "tree", scheme: "file" },
+  { language: "tree", scheme: "untitled" },
+];
 
 function getConfigStyle(): Style {
   const cfg = vscode.workspace.getConfiguration("dottree");
@@ -66,20 +30,18 @@ function isTreeLine(line: string): boolean {
   const s = line.trimEnd();
   if (!s) return false;
   return (
-    /[├└│]/.test(s) ||                // unicode box-drawing
-    /^(\|  )*(\+--|`--)(\s|$)/.test(s) || // common ascii tree
+    /[├└│]/.test(s) ||
+    /^(\|  )*(\+--|`--)(\s|$)/.test(s) ||
     /^(\s{3})*(\+--|`--)(\s|$)/.test(s)
   );
 }
 
 // Parse a line to (depth, text). We accept both unicode & ascii formats.
 function parseLine(line: string): { depth: number; text: string } | null {
-  const raw = line.replace(/\t/g, "  "); // keep simple
+  const raw = line.replace(/\t/g, "  ");
   const trimmedRight = raw.replace(/\s+$/, "");
   if (!trimmedRight) return null;
 
-  // Unicode style: each ancestor level is either "│  " or "   "
-  // Then branch is "├─" or "└─" (also accept "├──"/"└──"), text optional.
   const uni = /^((?:│  |   )*)([├└])─{1,2}(?:\s(.*))?$/u.exec(trimmedRight);
   if (uni) {
     const prefix = uni[1] ?? "";
@@ -88,7 +50,6 @@ function parseLine(line: string): { depth: number; text: string } | null {
     return { depth, text };
   }
 
-  // ASCII: ancestor levels often "|  " or "   ", branch "+--" or "`--", text optional.
   const ascii = /^((?:(?:\|  |   )*))(\+--|`--)(?:\s(.*))?$/.exec(trimmedRight);
   if (ascii) {
     const prefix = ascii[1] ?? "";
@@ -100,11 +61,16 @@ function parseLine(line: string): { depth: number; text: string } | null {
   return null;
 }
 
-function buildLine(depth: number, text: string, isLast: boolean, ancestorLast: boolean[], style: Style): string {
+function buildLine(
+  depth: number,
+  text: string,
+  isLast: boolean,
+  ancestorLast: boolean[],
+  style: Style
+): string {
   const pieces: string[] = [];
 
   for (let i = 0; i < depth; i++) {
-    // For each ancestor level, choose vertical continuation or blank
     const lastAtThisAncestor = ancestorLast[i] ?? false;
     if (style === "unicode") {
       pieces.push(lastAtThisAncestor ? "   " : "│  ");
@@ -113,7 +79,6 @@ function buildLine(depth: number, text: string, isLast: boolean, ancestorLast: b
     }
   }
 
-  // Branch marker for current line
   if (style === "unicode") {
     pieces.push(isLast ? "└─ " : "├─ ");
   } else {
@@ -131,8 +96,11 @@ function computeIsLast(nodes: NodeLine[]): boolean[] {
     const d = nodes[i].depth;
     let last = true;
     for (let j = i + 1; j < nodes.length; j++) {
-      if (nodes[j].depth < d) break;        // parent/super-sibling encountered -> no more siblings
-      if (nodes[j].depth === d) { last = false; break; } // found a sibling after me
+      if (nodes[j].depth < d) break;
+      if (nodes[j].depth === d) {
+        last = false;
+        break;
+      }
     }
     isLast[i] = last;
   }
@@ -147,7 +115,7 @@ function formatNodes(nodes: NodeLine[], style: Style): string[] {
   for (let i = 0; i < nodes.length; i++) {
     const d = nodes[i].depth;
     lastAtDepth.length = d;
-    const ancestorLast = lastAtDepth.map(x => x.isLast);
+    const ancestorLast = lastAtDepth.map((x) => x.isLast);
     lines.push(buildLine(d, nodes[i].text, isLast[i], ancestorLast, style));
     lastAtDepth[d] = { isLast: isLast[i] };
   }
@@ -156,7 +124,10 @@ function formatNodes(nodes: NodeLine[], style: Style): string[] {
 }
 
 // Expand to a contiguous "tree block" around a given line
-function findTreeBlock(doc: vscode.TextDocument, aroundLine: number): { start: number; end: number } | null {
+function findTreeBlock(
+  doc: vscode.TextDocument,
+  aroundLine: number
+): { start: number; end: number } | null {
   const n = doc.lineCount;
   if (aroundLine < 0 || aroundLine >= n) return null;
   if (!isTreeLine(doc.lineAt(aroundLine).text)) return null;
@@ -174,7 +145,7 @@ function parseBlock(doc: vscode.TextDocument, start: number, end: number): NodeL
   const nodes: NodeLine[] = [];
   for (let ln = start; ln <= end; ln++) {
     const parsed = parseLine(doc.lineAt(ln).text);
-    if (!parsed) continue; // skip non-parseable (shouldn't happen if isTreeLine is true, but safe)
+    if (!parsed) continue;
     nodes.push({ lineNo: ln, depth: parsed.depth, text: parsed.text });
   }
   return nodes;
@@ -206,155 +177,6 @@ function getTreeLineColumns(line: string): { markerEnd: number; payloadStart: nu
   }
 
   return null;
-}
-
-function computeIsLeaf(nodes: NodeLine[]): boolean[] {
-  const isLeaf = new Array(nodes.length).fill(true);
-  for (let i = 0; i < nodes.length; i++) {
-    if (i + 1 < nodes.length && nodes[i + 1].depth > nodes[i].depth) {
-      isLeaf[i] = false;
-    }
-  }
-  return isLeaf;
-}
-
-type DecorationBuckets = { prefixes: vscode.Range[]; folders: vscode.Range[]; files: vscode.Range[] };
-
-function isTreeDocument(doc: vscode.TextDocument): boolean {
-  if (doc.languageId === "tree") return true;
-  return doc.fileName.toLowerCase().endsWith(".tree");
-}
-
-function isMarkdownDocument(doc: vscode.TextDocument): boolean {
-  return doc.languageId === "markdown";
-}
-
-function addDecorationsForBlock(
-  doc: vscode.TextDocument,
-  blockStart: number,
-  blockEnd: number,
-  buckets: DecorationBuckets
-) {
-  const nodes = parseBlock(doc, blockStart, blockEnd);
-  const isLeaf = computeIsLeaf(nodes);
-  const lineTextCache = new Map<number, string>();
-
-  for (let i = 0; i < nodes.length; i++) {
-    const ln = nodes[i].lineNo;
-    const lineText = lineTextCache.get(ln) ?? doc.lineAt(ln).text;
-    lineTextCache.set(ln, lineText);
-
-    const cols = getTreeLineColumns(lineText);
-    if (!cols) continue;
-
-    const trimmedRightLen = lineText.replace(/\s+$/, "").length;
-    const prefixEnd = Math.min(cols.payloadStart, lineText.length);
-    if (prefixEnd > 0) {
-      buckets.prefixes.push(new vscode.Range(ln, 0, ln, prefixEnd));
-    }
-
-    let nameEnd = trimmedRightLen;
-    const commentStart = lineText.indexOf("#", cols.payloadStart);
-    if (commentStart >= cols.payloadStart && commentStart < trimmedRightLen) {
-      nameEnd = commentStart;
-    }
-    while (nameEnd > cols.payloadStart && lineText[nameEnd - 1] === " ") nameEnd--;
-
-    const name = lineText.slice(cols.payloadStart, nameEnd).trimEnd();
-    if (!name) continue;
-
-    if (nameEnd > cols.payloadStart) {
-      const start = cols.payloadStart;
-      const end = Math.min(nameEnd, lineText.length);
-      const length = Math.max(0, end - start);
-      if (length > 0) {
-        const isFolder = !isLeaf[i] || name.endsWith("/");
-        const range = new vscode.Range(ln, start, ln, start + length);
-        if (isFolder) buckets.folders.push(range);
-        else buckets.files.push(range);
-      }
-    }
-  }
-}
-
-function collectTreeDecorations(doc: vscode.TextDocument): DecorationBuckets {
-  const buckets: DecorationBuckets = { prefixes: [], folders: [], files: [] };
-
-  let line = 0;
-  while (line < doc.lineCount) {
-    if (!isTreeLine(doc.lineAt(line).text)) {
-      line++;
-      continue;
-    }
-
-    const block = findTreeBlock(doc, line);
-    if (!block) {
-      line++;
-      continue;
-    }
-
-    addDecorationsForBlock(doc, block.start, block.end, buckets);
-    line = block.end + 1;
-  }
-
-  return buckets;
-}
-
-function collectTreeDecorationsInRange(
-  doc: vscode.TextDocument,
-  startLine: number,
-  endLine: number,
-  buckets: DecorationBuckets
-) {
-  let line = startLine;
-  while (line <= endLine) {
-    if (!isTreeLine(doc.lineAt(line).text)) {
-      line++;
-      continue;
-    }
-
-    const blockStart = line;
-    while (line <= endLine && isTreeLine(doc.lineAt(line).text)) line++;
-    const blockEnd = line - 1;
-
-    addDecorationsForBlock(doc, blockStart, blockEnd, buckets);
-  }
-}
-
-function collectTreeDecorationsForMarkdown(doc: vscode.TextDocument): DecorationBuckets {
-  const buckets: DecorationBuckets = { prefixes: [], folders: [], files: [] };
-  let line = 0;
-  while (line < doc.lineCount) {
-    const text = doc.lineAt(line).text;
-    const fenceMatch = /^(\s*)(```+|~~~+)\s*([^\s`~]+)?\s*$/.exec(text);
-    if (!fenceMatch) {
-      line++;
-      continue;
-    }
-
-    const fence = fenceMatch[2];
-    const lang = (fenceMatch[3] ?? "").toLowerCase();
-    if (lang !== "tree") {
-      line++;
-      continue;
-    }
-
-    const fenceChar = fence[0];
-    const fenceLen = fence.length;
-    const closeRe = new RegExp(`^\\s*${fenceChar}{${fenceLen},}\\s*$`);
-    const startLine = line + 1;
-    line++;
-    while (line < doc.lineCount && !closeRe.test(doc.lineAt(line).text)) {
-      line++;
-    }
-    const endLine = line - 1;
-    if (endLine >= startLine) {
-      collectTreeDecorationsInRange(doc, startLine, endLine, buckets);
-    }
-    line++;
-  }
-
-  return buckets;
 }
 
 async function normalizeTreeBlock(doc: vscode.TextDocument, block: { start: number; end: number }) {
@@ -407,7 +229,6 @@ async function indentOrOutdent(editor: vscode.TextEditor, delta: number) {
   const around = sel.active.line;
   const block = findTreeBlock(doc, around);
   if (!block) {
-    // fallback to normal tab behavior when not on a tree line
     await vscode.commands.executeCommand(delta > 0 ? "tab" : "outdent");
     return;
   }
@@ -417,19 +238,16 @@ async function indentOrOutdent(editor: vscode.TextEditor, delta: number) {
 
   const style = getConfigStyle();
 
-  // Map document line -> node index
   const lineToIdx = new Map<number, number>();
   nodes.forEach((n, idx) => lineToIdx.set(n.lineNo, idx));
 
-  // Determine which node indices to shift
   const targets = new Set<number>();
 
   const hasSelection =
-    !(sel.isEmpty) &&
+    !sel.isEmpty &&
     (sel.start.line !== sel.end.line || sel.start.character !== sel.end.character);
 
   if (hasSelection) {
-    // Indent/outdent selected nodes and their subtrees
     const a = Math.min(sel.start.line, sel.end.line);
     const b = Math.max(sel.start.line, sel.end.line);
     const selectedIdx: number[] = [];
@@ -442,7 +260,6 @@ async function indentOrOutdent(editor: vscode.TextEditor, delta: number) {
       for (let k = i0; k <= i1; k++) targets.add(k);
     }
   } else {
-    // Single cursor: indent/outdent current line, optionally include its subtree
     const idx = lineToIdx.get(sel.active.line);
     if (idx === undefined) return;
     if (indentSubtreeOnSingleCursor()) {
@@ -453,7 +270,6 @@ async function indentOrOutdent(editor: vscode.TextEditor, delta: number) {
     }
   }
 
-  // Apply depth delta (clamp at 0). Prevent depth jumps when indenting.
   if (delta > 0) {
     const applyIndent = new Array(nodes.length).fill(false);
     for (const idx of targets) applyIndent[idx] = true;
@@ -478,14 +294,12 @@ async function indentOrOutdent(editor: vscode.TextEditor, delta: number) {
     }
   }
 
-  // After depth change, we normalize *all* lines in this tree block
   const formatted = formatNodes(nodes, style);
   const outLines = new Map<number, string>();
   for (let i = 0; i < nodes.length; i++) {
     outLines.set(nodes[i].lineNo, formatted[i]);
   }
 
-  // Apply edit as a single workspace edit (replace exact lines)
   const edit = new vscode.WorkspaceEdit();
   for (let ln = block.start; ln <= block.end; ln++) {
     if (!outLines.has(ln)) continue;
@@ -519,7 +333,11 @@ async function insertSiblingLine(editor: vscode.TextEditor) {
   if (nodes.length === 0) return;
 
   const treeCols = getTreeLineColumns(doc.lineAt(around).text);
-  if (treeCols && sel.active.character >= treeCols.markerEnd && sel.active.character <= treeCols.payloadStart) {
+  if (
+    treeCols &&
+    sel.active.character >= treeCols.markerEnd &&
+    sel.active.character <= treeCols.payloadStart
+  ) {
     const lineToIdx = new Map<number, number>();
     nodes.forEach((n, idx) => lineToIdx.set(n.lineNo, idx));
 
@@ -588,7 +406,11 @@ async function insertSiblingLine(editor: vscode.TextEditor) {
       const { i1 } = subtreeRange(nodes, idx);
       nodes[idx].text = leftText;
       insertIndex = i1 + 1;
-      nodes.splice(insertIndex, 0, { lineNo: -1, depth: nodes[idx].depth, text: rightText });
+      nodes.splice(insertIndex, 0, {
+        lineNo: -1,
+        depth: nodes[idx].depth,
+        text: rightText,
+      });
       didSplit = true;
     }
   }
@@ -668,9 +490,6 @@ function buildTreeFoldingRanges(doc: vscode.TextDocument): vscode.FoldingRange[]
       continue;
     }
 
-    const lineToIdx = new Map<number, number>();
-    nodes.forEach((n, idx) => lineToIdx.set(n.lineNo, idx));
-
     for (let i = 0; i < nodes.length; i++) {
       const { i1 } = subtreeRange(nodes, i);
       if (i1 <= i) continue;
@@ -689,24 +508,6 @@ function buildTreeFoldingRanges(doc: vscode.TextDocument): vscode.FoldingRange[]
 
 export function activate(context: vscode.ExtensionContext) {
   const docLineCounts = new Map<string, number>();
-  let decorations = buildDecorationSet();
-
-  const updateDecorations = (editor?: vscode.TextEditor) => {
-    const active = editor ?? vscode.window.activeTextEditor;
-    if (!active) return;
-    if (!isTreeDocument(active.document) && !isMarkdownDocument(active.document)) {
-      active.setDecorations(decorations.prefixes, []);
-      active.setDecorations(decorations.folders, []);
-      if (decorations.files) active.setDecorations(decorations.files, []);
-      return;
-    }
-    const { prefixes, folders, files } = isMarkdownDocument(active.document)
-      ? collectTreeDecorationsForMarkdown(active.document)
-      : collectTreeDecorations(active.document);
-    active.setDecorations(decorations.prefixes, prefixes);
-    active.setDecorations(decorations.folders, folders);
-    if (decorations.files) active.setDecorations(decorations.files, files);
-  };
 
   // Update context key so Tab/Shift+Tab only override on tree lines
   const updateContext = (editor?: vscode.TextEditor) => {
@@ -716,19 +517,17 @@ export function activate(context: vscode.ExtensionContext) {
 
     const line = editor.selection.active.line;
     const active = line >= 0 && line < doc.lineCount && isTreeLine(doc.lineAt(line).text);
-    vscode.commands.executeCommand("setContext", "dottree.activeTreeLine", active);
+    void vscode.commands.executeCommand("setContext", "dottree.activeTreeLine", active);
     docLineCounts.set(doc.uri.toString(), doc.lineCount);
   };
 
   context.subscriptions.push(
     vscode.window.onDidChangeActiveTextEditor((editor) => {
       updateContext(editor);
-      updateDecorations(editor);
     }),
     vscode.window.onDidChangeTextEditorSelection(() => updateContext()),
     vscode.workspace.onDidChangeTextDocument(async (e) => {
       updateContext();
-      updateDecorations(vscode.window.activeTextEditor);
       if (isApplyingEdit) return;
 
       const docKey = e.document.uri.toString();
@@ -757,42 +556,20 @@ export function activate(context: vscode.ExtensionContext) {
         await normalizeTreeBlock(e.document, block);
         break;
       }
-    }),
-  );
-
-  context.subscriptions.push(
-    vscode.workspace.onDidChangeConfiguration((e) => {
-      if (!e.affectsConfiguration("dottree")) return;
-      decorations.prefixes.dispose();
-      decorations.folders.dispose();
-      decorations.files?.dispose();
-      decorations = buildDecorationSet();
-      updateDecorations(vscode.window.activeTextEditor);
     })
   );
-  context.subscriptions.push({
-    dispose: () => {
-      decorations.prefixes.dispose();
-      decorations.folders.dispose();
-      decorations.files?.dispose();
-    },
-  });
 
   updateContext();
-  updateDecorations(vscode.window.activeTextEditor);
 
   context.subscriptions.push(
     vscode.languages.registerFoldingRangeProvider(
-      [
-        { language: "tree", scheme: "file" },
-        { language: "tree", scheme: "untitled" },
-      ],
+      TREE_DOCUMENT_SELECTOR,
       {
         provideFoldingRanges: (document) => buildTreeFoldingRanges(document),
       }
     ),
     vscode.languages.registerCompletionItemProvider(
-      [{ scheme: "file" }, { scheme: "untitled" }],
+      TREE_DOCUMENT_SELECTOR,
       {
         provideCompletionItems: (document, position) =>
           getTreeSnippetCompletion(document, position),

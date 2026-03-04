@@ -1,8 +1,8 @@
 {
   "name": "dottree",
   "displayName": "dottree",
-  "description": "Maintain directory-tree text with automatic prefixes and Enter/Tab helpers.",
-  "version": "0.0.3",
+  "description": "Maintain Tree files with automatic prefixes, syntax highlighting, and Enter/Tab helpers.",
+  "version": "0.0.4",
   "publisher": "idlesilver",
   "icon": "images/icon.png",
   "repository": {
@@ -13,17 +13,26 @@
   "bugs": {
     "url": "https://github.com/idlesilver/dottree/issues"
   },
+  "files": [
+    "dist",
+    "syntaxes",
+    "images",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE",
+    "package.json"
+  ],
   "engines": {
     "vscode": "^1.85.0"
   },
   "categories": ["Other"],
   "activationEvents": [
+    "onLanguage:tree",
     "onCommand:dottree.indent",
     "onCommand:dottree.outdent",
-    "onCommand:dottree.newline",
-    "onStartupFinished"
+    "onCommand:dottree.newline"
   ],
-  "main": "./dist/extension.js",
+  "main": "dist/extension.js",
   "contributes": {
     "commands": [
       { "command": "dottree.indent", "title": "Dot Tree: Indent (maintain prefixes)" },
@@ -48,17 +57,17 @@
       {
         "command": "dottree.indent",
         "key": "tab",
-        "when": "editorTextFocus && dottree.activeTreeLine && !suggestWidgetVisible && !inlineSuggestionVisible"
+        "when": "editorTextFocus && !editorReadonly && dottree.activeTreeLine && !suggestWidgetVisible && !inlineSuggestionVisible"
       },
       {
         "command": "dottree.outdent",
         "key": "shift+tab",
-        "when": "editorTextFocus && dottree.activeTreeLine"
+        "when": "editorTextFocus && !editorReadonly && dottree.activeTreeLine"
       },
       {
         "command": "dottree.newline",
         "key": "enter",
-        "when": "editorTextFocus && dottree.activeTreeLine"
+        "when": "editorTextFocus && !editorReadonly && dottree.activeTreeLine"
       }
     ],
     "configuration": {
@@ -74,21 +83,6 @@
           "type": "boolean",
           "default": true,
           "description": "When there's no selection, indent/outdent the current line plus its subtree."
-        },
-        "dottree.prefixColor": {
-          "type": "string",
-          "default": "theme:editorWhitespace.foreground",
-          "description": "Color for tree prefixes. Use a hex color or theme token like 'theme:editorWhitespace.foreground'."
-        },
-        "dottree.folderColor": {
-          "type": "string",
-          "default": "#F2994A",
-          "description": "Color for folder names."
-        },
-        "dottree.fileColor": {
-          "type": ["string", "null"],
-          "default": null,
-          "description": "Color for file names. Null means no special highlight."
         }
       }
     }
@@ -96,7 +90,9 @@
   "scripts": {
     "vscode:prepublish": "npm run build",
     "build": "tsc -p .",
-    "watch": "tsc -watch -p ."
+    "watch": "tsc -watch -p .",
+    "package:vsix": "npm run build && vsce package --no-dependencies",
+    "package:vsix:latest": "npm run build && vsce package --no-dependencies --out dottree-latest.vsix"
   },
   "devDependencies": {
     "@types/vscode": "^1.85.0",
