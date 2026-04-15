@@ -10,6 +10,18 @@ type NodeLine = {
 
 let isApplyingEdit = false;
 
+type ParsedTreeLine = {
+  prefix: string;
+  marker: string;
+  markerStart: number;
+  markerEnd: number;
+  text: string;
+};
+
+type IndentInfo = {
+  spaceWidth?: number;
+};
+
 const TREE_DOCUMENT_SELECTOR: vscode.DocumentSelector = [
   { language: "tree", scheme: "file" },
   { language: "tree", scheme: "untitled" },
@@ -25,40 +37,113 @@ function indentSubtreeOnSingleCursor(): boolean {
   return cfg.get<boolean>("indentSubtreeOnSingleCursor", true) ?? true;
 }
 
+const TREE_LINE_RE = /^([\s│|]*?)([├└][─-]+|\+--|`--|\|-|\\-)\s*(.*)$/u;
+
+function parseTreeLineParts(line: string): ParsedTreeLine | null {
+  const trimmedRight = line.replace(/\s+$/, "");
+  if (!trimmedRight) return null;
+
+  const match = TREE_LINE_RE.exec(trimmedRight);
+  if (!match) return null;
+
+  const prefix = match[1] ?? "";
+  const marker = match[2] ?? "";
+  const markerStart = prefix.length;
+  const markerEnd = markerStart + marker.length;
+  const text = (match[3] ?? "").trimEnd();
+  return { prefix, marker, markerStart, markerEnd, text };
+}
+
+function inferIndentInfo(parts: ParsedTreeLine[]): IndentInfo {
+  const candidates: number[] = [];
+
+  for (const part of parts) {
+    const positions: number[] = [];
+    for (let i = 0; i < part.prefix.length; i++) {
+      if (part.prefix[i] === "│" || part.prefix[i] === "|") {
+        positions.push(i);
+      }
+    }
+    positions.push(part.markerStart);
+
+    for (let i = 1; i < positions.length; i++) {
+      const segment = part.prefix.slice(positions[i - 1], positions[i]);
+      if (segment.includes("\t")) continue;
+      const width = positions[i] - positions[i - 1];
+      if (width > 0) candidates.push(width);
+    }
+
+    if (part.markerStart > 0 && !part.prefix.includes("\t")) {
+      candidates.push(part.markerStart);
+    }
+  }
+
+  return { spaceWidth: candidates.length ? Math.min(...candidates) : undefined };
+}
+
+function depthFromWhitespace(prefix: string, spaceWidth: number | undefined): number {
+  let depth = 0;
+  let spaces = 0;
+
+  for (const ch of prefix) {
+    if (ch === "\t") {
+      if (spaces > 0) {
+        depth += spaceWidth ? Math.round(spaces / spaceWidth) : 1;
+        spaces = 0;
+      }
+      depth++;
+    } else if (ch === " ") {
+      spaces++;
+    }
+  }
+
+  if (spaces > 0) {
+    depth += spaceWidth ? Math.round(spaces / spaceWidth) : 1;
+  }
+
+  return depth;
+}
+
+function visualColumn(text: string, tabWidth: number): number {
+  let column = 0;
+  for (const ch of text) {
+    if (ch === "\t") {
+      const remainder = column % tabWidth;
+      column += remainder === 0 ? tabWidth : tabWidth - remainder;
+    } else {
+      column++;
+    }
+  }
+  return column;
+}
+
+function depthFromPrefix(part: ParsedTreeLine, indentInfo: IndentInfo): number {
+  const guideDepth = Array.from(part.prefix).filter((ch) => ch === "│" || ch === "|").length;
+  if (part.markerStart === 0) return guideDepth;
+
+  if (indentInfo.spaceWidth) {
+    const columnDepth = Math.round(
+      visualColumn(part.prefix, indentInfo.spaceWidth) / indentInfo.spaceWidth
+    );
+    return Math.max(guideDepth, columnDepth);
+  }
+
+  if (part.prefix.includes("\t")) {
+    return Math.max(guideDepth, depthFromWhitespace(part.prefix, undefined));
+  }
+  return guideDepth;
+}
+
 // Detect if a line looks like a tree line (unicode or ascii-ish)
 function isTreeLine(line: string): boolean {
-  const s = line.trimEnd();
-  if (!s) return false;
-  return (
-    /[├└│]/.test(s) ||
-    /^(\|  )*(\+--|`--)(\s|$)/.test(s) ||
-    /^(\s{3})*(\+--|`--)(\s|$)/.test(s)
-  );
+  return parseTreeLineParts(line) !== null;
 }
 
 // Parse a line to (depth, text). We accept both unicode & ascii formats.
 function parseLine(line: string): { depth: number; text: string } | null {
-  const raw = line.replace(/\t/g, "  ");
-  const trimmedRight = raw.replace(/\s+$/, "");
-  if (!trimmedRight) return null;
-
-  const uni = /^((?:│  |   )*)([├└])─{1,2}(?:\s(.*))?$/u.exec(trimmedRight);
-  if (uni) {
-    const prefix = uni[1] ?? "";
-    const text = (uni[3] ?? "").trimEnd();
-    const depth = Math.floor(prefix.length / 3);
-    return { depth, text };
-  }
-
-  const ascii = /^((?:(?:\|  |   )*))(\+--|`--)(?:\s(.*))?$/.exec(trimmedRight);
-  if (ascii) {
-    const prefix = ascii[1] ?? "";
-    const text = (ascii[3] ?? "").trimEnd();
-    const depth = Math.floor(prefix.length / 3);
-    return { depth, text };
-  }
-
-  return null;
+  const part = parseTreeLineParts(line);
+  if (!part) return null;
+  return { depth: depthFromPrefix(part, inferIndentInfo([part])), text: part.text };
 }
 
 function buildLine(
@@ -142,41 +227,32 @@ function findTreeBlock(
 }
 
 function parseBlock(doc: vscode.TextDocument, start: number, end: number): NodeLine[] {
-  const nodes: NodeLine[] = [];
+  const parts: { lineNo: number; parsed: ParsedTreeLine }[] = [];
   for (let ln = start; ln <= end; ln++) {
-    const parsed = parseLine(doc.lineAt(ln).text);
+    const parsed = parseTreeLineParts(doc.lineAt(ln).text);
     if (!parsed) continue;
-    nodes.push({ lineNo: ln, depth: parsed.depth, text: parsed.text });
+    parts.push({ lineNo: ln, parsed });
+  }
+
+  const indentInfo = inferIndentInfo(parts.map((part) => part.parsed));
+  const nodes: NodeLine[] = [];
+  for (const part of parts) {
+    nodes.push({
+      lineNo: part.lineNo,
+      depth: depthFromPrefix(part.parsed, indentInfo),
+      text: part.parsed.text,
+    });
   }
   return nodes;
 }
 
 function getTreeLineColumns(line: string): { markerEnd: number; payloadStart: number } | null {
-  const raw = line;
-  const trimmedRight = raw.replace(/\s+$/, "");
-  if (!trimmedRight) return null;
+  const parsed = parseTreeLineParts(line);
+  if (!parsed) return null;
 
-  const uni = /^((?:│  |   )*)([├└]─{1,2})(.*)$/u.exec(trimmedRight);
-  if (uni) {
-    const prefixLen = (uni[1] ?? "").length;
-    const markerLen = (uni[2] ?? "").length;
-    const markerEnd = prefixLen + markerLen;
-    let payloadStart = markerEnd;
-    while (raw[payloadStart] === " ") payloadStart++;
-    return { markerEnd, payloadStart };
-  }
-
-  const ascii = /^((?:(?:\|  |   )*))(\+--|`--)(.*)$/.exec(trimmedRight);
-  if (ascii) {
-    const prefixLen = (ascii[1] ?? "").length;
-    const markerLen = (ascii[2] ?? "").length;
-    const markerEnd = prefixLen + markerLen;
-    let payloadStart = markerEnd;
-    while (raw[payloadStart] === " ") payloadStart++;
-    return { markerEnd, payloadStart };
-  }
-
-  return null;
+  let payloadStart = parsed.markerEnd;
+  while (/\s/u.test(line[payloadStart] ?? "")) payloadStart++;
+  return { markerEnd: parsed.markerEnd, payloadStart };
 }
 
 async function normalizeTreeBlock(doc: vscode.TextDocument, block: { start: number; end: number }) {

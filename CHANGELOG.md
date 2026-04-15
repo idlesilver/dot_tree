@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.0.5
+- Support tree prefixes with variable spaces or tabs, including standard `tree` output such as `│   └──`.
+- Improve Tree grammar matching for flexible unicode and ascii prefixes.
+
 ## 0.0.4
 - Document `editor.tokenColorCustomizations.textMateRules` as the supported way to customize tree highlight colors.
 - Clarify that tree highlighting is theme-driven through Tree TextMate scopes.

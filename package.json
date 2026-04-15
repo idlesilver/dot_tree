@@ -2,7 +2,7 @@
   "name": "dottree",
   "displayName": "dottree",
   "description": "Maintain Tree files with automatic prefixes, syntax highlighting, and Enter/Tab helpers.",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "publisher": "idlesilver",
   "icon": "images/icon.png",
   "repository": {
@@ -92,7 +92,8 @@
     "build": "tsc -p .",
     "watch": "tsc -watch -p .",
     "package:vsix": "npm run build && vsce package --no-dependencies",
-    "package:vsix:latest": "npm run build && vsce package --no-dependencies --out dottree-latest.vsix"
+    "package:vsix:latest": "npm run build && vsce package --no-dependencies --out dottree-latest.vsix",
+    "publish": "npm run build && vsce publish --no-dependencies && npx ovsx publish"
   },
   "devDependencies": {
     "@types/vscode": "^1.85.0",

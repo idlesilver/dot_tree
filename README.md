@@ -10,6 +10,7 @@ Maintain Tree files with automatic prefixes, syntax highlighting, and folding.
 - Highlight prefixes, folders, files, and comments through the Tree grammar in `Tree` files.
 - `#` comments supported (uses theme comment color).
 - Folding for subtrees (triangle gutter, like code folding).
+- Handles pasted tree output with variable spaces or tabs in prefixes.
 - Works in `.tree` files and files whose language mode is `Tree`.
 
 ## Quick Start
@@ -29,9 +30,9 @@ Maintain Tree files with automatic prefixes, syntax highlighting, and folding.
 ```
 project_root/
 ├─ src
-│  └─ app/
-│     ├─ core/
-│     └─ ui/
+│   └── app/
+│       ├── core/
+│       └── ui/
 └─ README.md # note
 ```
 
