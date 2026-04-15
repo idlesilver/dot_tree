@@ -27,13 +27,19 @@ const TREE_DOCUMENT_SELECTOR: vscode.DocumentSelector = [
   { language: "tree", scheme: "untitled" },
 ];
 
+const MARKDOWN_DOCUMENT_SELECTOR: vscode.DocumentSelector = [
+  { language: "markdown", scheme: "file" },
+  { language: "markdown", scheme: "untitled" },
+];
+
 const TREE_SEMANTIC_TOKEN_LEGEND = new vscode.SemanticTokensLegend(
-  ["dottreeFolder", "dottreeFile", "dottreeComment"],
+  ["dottreeFolder", "dottreeFile", "dottreeComment", "dottreePrefix"],
   []
 );
 const TREE_TOKEN_FOLDER = 0;
 const TREE_TOKEN_FILE = 1;
 const TREE_TOKEN_COMMENT = 2;
+const TREE_TOKEN_PREFIX = 3;
 
 function getConfigStyle(): Style {
   const cfg = vscode.workspace.getConfiguration("dottree");
@@ -217,21 +223,31 @@ function formatNodes(nodes: NodeLine[], style: Style): string[] {
 }
 
 // Expand to a contiguous "tree block" around a given line
+function findTreeBlockInRange(
+  doc: vscode.TextDocument,
+  aroundLine: number,
+  minLine: number,
+  maxLine: number
+): { start: number; end: number } | null {
+  const n = doc.lineCount;
+  if (aroundLine < 0 || aroundLine >= n) return null;
+  if (aroundLine < minLine || aroundLine > maxLine) return null;
+  if (!isTreeLine(doc.lineAt(aroundLine).text)) return null;
+
+  let start = aroundLine;
+  while (start - 1 >= minLine && isTreeLine(doc.lineAt(start - 1).text)) start--;
+
+  let end = aroundLine;
+  while (end + 1 <= maxLine && end + 1 < n && isTreeLine(doc.lineAt(end + 1).text)) end++;
+
+  return { start, end };
+}
+
 function findTreeBlock(
   doc: vscode.TextDocument,
   aroundLine: number
 ): { start: number; end: number } | null {
-  const n = doc.lineCount;
-  if (aroundLine < 0 || aroundLine >= n) return null;
-  if (!isTreeLine(doc.lineAt(aroundLine).text)) return null;
-
-  let start = aroundLine;
-  while (start - 1 >= 0 && isTreeLine(doc.lineAt(start - 1).text)) start--;
-
-  let end = aroundLine;
-  while (end + 1 < n && isTreeLine(doc.lineAt(end + 1).text)) end++;
-
-  return { start, end };
+  return findTreeBlockInRange(doc, aroundLine, 0, doc.lineCount - 1);
 }
 
 function parseBlock(doc: vscode.TextDocument, start: number, end: number): NodeLine[] {
@@ -306,11 +322,28 @@ function pushTreeItemSemanticTokens(
   }
 }
 
-function buildTreeSemanticTokens(doc: vscode.TextDocument): vscode.SemanticTokens {
-  const builder = new vscode.SemanticTokensBuilder(TREE_SEMANTIC_TOKEN_LEGEND);
-  let line = 0;
+function pushTreeLineSemanticTokens(
+  builder: vscode.SemanticTokensBuilder,
+  lineNo: number,
+  cols: { markerEnd: number; payloadStart: number },
+  text: string,
+  isFolder: boolean
+) {
+  if (cols.payloadStart > 0) {
+    builder.push(lineNo, 0, cols.payloadStart, TREE_TOKEN_PREFIX);
+  }
+  pushTreeItemSemanticTokens(builder, lineNo, cols.payloadStart, text, isFolder);
+}
 
-  while (line < doc.lineCount) {
+function pushTreeSemanticTokensInRange(
+  doc: vscode.TextDocument,
+  builder: vscode.SemanticTokensBuilder,
+  startLine: number,
+  endLine: number
+) {
+  let line = startLine;
+
+  while (line <= endLine && line < doc.lineCount) {
     const lineText = doc.lineAt(line).text;
     const lineComment = /^\s*#/u.exec(lineText);
     if (lineComment) {
@@ -321,7 +354,7 @@ function buildTreeSemanticTokens(doc: vscode.TextDocument): vscode.SemanticToken
     }
 
     if (!isTreeLine(lineText)) {
-      if (line + 1 < doc.lineCount && isTreeLine(doc.lineAt(line + 1).text)) {
+      if (line + 1 <= endLine && line + 1 < doc.lineCount && isTreeLine(doc.lineAt(line + 1).text)) {
         const payloadStart = lineText.search(/\S/u);
         if (payloadStart >= 0) {
           pushTreeItemSemanticTokens(builder, line, payloadStart, lineText, true);
@@ -331,7 +364,7 @@ function buildTreeSemanticTokens(doc: vscode.TextDocument): vscode.SemanticToken
       continue;
     }
 
-    const block = findTreeBlock(doc, line);
+    const block = findTreeBlockInRange(doc, line, startLine, endLine);
     if (!block) {
       line++;
       continue;
@@ -347,10 +380,67 @@ function buildTreeSemanticTokens(doc: vscode.TextDocument): vscode.SemanticToken
       const hasChildren = i + 1 < nodes.length && nodes[i + 1].depth > node.depth;
       const itemText = treeItemTextBeforeComment(node.text);
       const isFolder = hasChildren || itemText.endsWith("/");
-      pushTreeItemSemanticTokens(builder, node.lineNo, cols.payloadStart, text, isFolder);
+      pushTreeLineSemanticTokens(builder, node.lineNo, cols, text, isFolder);
     }
 
     line = block.end + 1;
+  }
+}
+
+function buildTreeSemanticTokens(doc: vscode.TextDocument): vscode.SemanticTokens {
+  const builder = new vscode.SemanticTokensBuilder(TREE_SEMANTIC_TOKEN_LEGEND);
+  pushTreeSemanticTokensInRange(doc, builder, 0, doc.lineCount - 1);
+
+  return builder.build();
+}
+
+function parseMarkdownTreeFenceOpen(line: string): { fenceChar: string; fenceLength: number } | null {
+  const match = /^\s*(`{3,}|~{3,})\s*([A-Za-z0-9_-]+)?(?:\s|$)/u.exec(line);
+  const info = (match?.[2] ?? "").toLowerCase();
+  if (info !== "tree" && info !== "text") return null;
+
+  const fence = match?.[1] ?? "";
+  return { fenceChar: fence[0], fenceLength: fence.length };
+}
+
+function isMarkdownFenceClose(
+  line: string,
+  fence: { fenceChar: string; fenceLength: number }
+): boolean {
+  const trimmed = line.trim();
+  return (
+    trimmed.length >= fence.fenceLength &&
+    Array.from(trimmed).every((ch) => ch === fence.fenceChar)
+  );
+}
+
+function buildMarkdownTreeSemanticTokens(doc: vscode.TextDocument): vscode.SemanticTokens {
+  const builder = new vscode.SemanticTokensBuilder(TREE_SEMANTIC_TOKEN_LEGEND);
+  let line = 0;
+
+  while (line < doc.lineCount) {
+    const fence = parseMarkdownTreeFenceOpen(doc.lineAt(line).text);
+    if (!fence) {
+      line++;
+      continue;
+    }
+
+    const contentStart = line + 1;
+    let contentEnd = doc.lineCount - 1;
+    let cursor = contentStart;
+    while (cursor < doc.lineCount) {
+      if (isMarkdownFenceClose(doc.lineAt(cursor).text, fence)) {
+        contentEnd = cursor - 1;
+        break;
+      }
+      cursor++;
+    }
+
+    if (contentStart <= contentEnd) {
+      pushTreeSemanticTokensInRange(doc, builder, contentStart, contentEnd);
+    }
+
+    line = cursor < doc.lineCount ? cursor + 1 : doc.lineCount;
   }
 
   return builder.build();
@@ -749,6 +839,13 @@ export function activate(context: vscode.ExtensionContext) {
       TREE_DOCUMENT_SELECTOR,
       {
         provideDocumentSemanticTokens: (document) => buildTreeSemanticTokens(document),
+      },
+      TREE_SEMANTIC_TOKEN_LEGEND
+    ),
+    vscode.languages.registerDocumentSemanticTokensProvider(
+      MARKDOWN_DOCUMENT_SELECTOR,
+      {
+        provideDocumentSemanticTokens: (document) => buildMarkdownTreeSemanticTokens(document),
       },
       TREE_SEMANTIC_TOKEN_LEGEND
     ),

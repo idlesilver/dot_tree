@@ -12,6 +12,7 @@ Maintain Tree files with automatic prefixes, syntax highlighting, and folding.
 - `#` comments supported (uses theme comment color).
 - Folding for subtrees (triangle gutter, like code folding).
 - Handles pasted tree output with variable spaces or tabs in prefixes.
+- Highlights tree content in Markdown fenced code blocks marked as `tree` or `text`.
 - Works in `.tree` files and files whose language mode is `Tree`.
 
 ## Quick Start
@@ -21,20 +22,23 @@ Maintain Tree files with automatic prefixes, syntax highlighting, and folding.
 3. Use Enter to add a sibling line.
 4. Type `|` on an empty line and accept the snippet to insert:
 
-```
-./
+```text
+.
 └── README.md
 ```
 
 ## Example
 
-```
+```tree
 project_root/
 ├── src
-│   └── app/
-│       ├── core/
-│       └── ui/
-└── README.md # note
+│   ├── core
+│   │   └── index.ts
+│   └── ui/
+│       └── Button.tsx
+├── docs/ # leaf folder (trailing slash)
+├── README.md # comment color should follow theme
+└── package.json
 ```
 
 ## Commands
@@ -56,6 +60,8 @@ project_root/
 ## Highlight Customization
 
 Prefix highlighting comes from TextMate scopes. Folder, file, and comment names also use semantic tokens so folders can be detected from child lines even when they do not end with `/`.
+
+The same semantic highlighting is applied inside Markdown fenced code blocks marked as `tree` or `text`.
 
 Colors are controlled by the active theme or editor color customizations, not by extension settings.
 

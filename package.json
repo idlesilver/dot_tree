@@ -2,7 +2,7 @@
   "name": "dottree",
   "displayName": "dottree",
   "description": "Maintain Tree files with automatic prefixes, syntax highlighting, and Enter/Tab helpers.",
-  "version": "0.0.7",
+  "version": "0.0.8",
   "publisher": "idlesilver",
   "icon": "images/icon.png",
   "repository": {
@@ -27,6 +27,7 @@
   },
   "categories": ["Other"],
   "activationEvents": [
+    "onLanguage:markdown",
     "onLanguage:tree",
     "onCommand:dottree.indent",
     "onCommand:dottree.outdent",
@@ -68,6 +69,11 @@
         "id": "dottreeComment",
         "superType": "comment",
         "description": "A comment in a tree file."
+      },
+      {
+        "id": "dottreePrefix",
+        "superType": "operator",
+        "description": "A tree prefix marker."
       }
     ],
     "semanticTokenScopes": [
@@ -76,7 +82,17 @@
         "scopes": {
           "dottreeFolder": ["entity.name.namespace.tree"],
           "dottreeFile": ["string.unquoted.filename.tree"],
-          "dottreeComment": ["comment.line.number-sign.tree"]
+          "dottreeComment": ["comment.line.number-sign.tree"],
+          "dottreePrefix": ["punctuation.definition.tree"]
+        }
+      },
+      {
+        "language": "markdown",
+        "scopes": {
+          "dottreeFolder": ["entity.name.namespace.tree"],
+          "dottreeFile": ["string.unquoted.filename.tree"],
+          "dottreeComment": ["comment.line.number-sign.tree"],
+          "dottreePrefix": ["punctuation.definition.tree"]
         }
       }
     ],
@@ -114,6 +130,9 @@
       }
     },
     "configurationDefaults": {
+      "[markdown]": {
+        "editor.semanticHighlighting.enabled": true
+      },
       "[tree]": {
         "editor.semanticHighlighting.enabled": true
       }

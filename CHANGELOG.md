@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.0.8
+- Highlight tree content inside Markdown fenced code blocks marked as `tree` or `text`.
+- Add semantic prefix highlighting so Markdown tree blocks can color tree guides and branch markers.
+
 ## 0.0.7
 - Detect folder lines from tree structure, so parent items no longer need a trailing `/` for folder highlighting.
 - Add semantic tokens for folders, files, and comments while keeping existing TextMate scope customizations.
