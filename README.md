@@ -7,7 +7,8 @@ Maintain Tree files with automatic prefixes, syntax highlighting, and folding.
 - Maintain tree prefixes while indenting/outdenting (Tab/Shift+Tab).
 - Insert a sibling line with Enter.
 - Snippet: type `|` to insert a starter tree.
-- Highlight prefixes, folders, files, and comments through the Tree grammar in `Tree` files.
+- Highlight prefixes, folders, files, and comments in `Tree` files.
+- Folder lines are detected from tree structure, so a parent item does not need a trailing `/`.
 - `#` comments supported (uses theme comment color).
 - Folding for subtrees (triangle gutter, like code folding).
 - Handles pasted tree output with variable spaces or tabs in prefixes.
@@ -54,7 +55,9 @@ project_root/
 
 ## Highlight Customization
 
-Highlighting now comes from TextMate scopes, so colors are controlled by the active theme or `editor.tokenColorCustomizations`, not by extension settings.
+Prefix highlighting comes from TextMate scopes. Folder, file, and comment names also use semantic tokens so folders can be detected from child lines even when they do not end with `/`.
+
+Colors are controlled by the active theme or editor color customizations, not by extension settings.
 
 Use `textMateRules` directly. The generic shortcut fields such as `comments` or `strings` will not target these tree-specific scopes.
 

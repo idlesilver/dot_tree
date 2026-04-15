@@ -2,7 +2,7 @@
   "name": "dottree",
   "displayName": "dottree",
   "description": "Maintain Tree files with automatic prefixes, syntax highlighting, and Enter/Tab helpers.",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "publisher": "idlesilver",
   "icon": "images/icon.png",
   "repository": {
@@ -53,6 +53,33 @@
         "path": "./syntaxes/tree.tmLanguage.json"
       }
     ],
+    "semanticTokenTypes": [
+      {
+        "id": "dottreeFolder",
+        "superType": "namespace",
+        "description": "A folder item in a tree file."
+      },
+      {
+        "id": "dottreeFile",
+        "superType": "string",
+        "description": "A file item in a tree file."
+      },
+      {
+        "id": "dottreeComment",
+        "superType": "comment",
+        "description": "A comment in a tree file."
+      }
+    ],
+    "semanticTokenScopes": [
+      {
+        "language": "tree",
+        "scopes": {
+          "dottreeFolder": ["entity.name.namespace.tree"],
+          "dottreeFile": ["string.unquoted.filename.tree"],
+          "dottreeComment": ["comment.line.number-sign.tree"]
+        }
+      }
+    ],
     "keybindings": [
       {
         "command": "dottree.indent",
@@ -84,6 +111,11 @@
           "default": true,
           "description": "When there's no selection, indent/outdent the current line plus its subtree."
         }
+      }
+    },
+    "configurationDefaults": {
+      "[tree]": {
+        "editor.semanticHighlighting.enabled": true
       }
     }
   },
