@@ -158,14 +158,14 @@ function buildLine(
   for (let i = 0; i < depth; i++) {
     const lastAtThisAncestor = ancestorLast[i] ?? false;
     if (style === "unicode") {
-      pieces.push(lastAtThisAncestor ? "   " : "│  ");
+      pieces.push(lastAtThisAncestor ? "    " : "│   ");
     } else {
       pieces.push(lastAtThisAncestor ? "   " : "|  ");
     }
   }
 
   if (style === "unicode") {
-    pieces.push(isLast ? "└─ " : "├─ ");
+    pieces.push(isLast ? "└── " : "├── ");
   } else {
     pieces.push(isLast ? "`-- " : "+-- ");
   }
@@ -534,7 +534,7 @@ function getTreeSnippetCompletion(
   if (!before.endsWith("|")) return;
 
   const indent = line.text.slice(0, line.firstNonWhitespaceCharacterIndex);
-  const snippet = new vscode.SnippetString(`${indent}./\n${indent}└─ README.md`);
+  const snippet = new vscode.SnippetString(`${indent}./\n${indent}└── README.md`);
 
   const item = new vscode.CompletionItem("dottree template", vscode.CompletionItemKind.Snippet);
   item.detail = "dottree";

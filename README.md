@@ -22,18 +22,18 @@ Maintain Tree files with automatic prefixes, syntax highlighting, and folding.
 
 ```
 ./
-└─ README.md
+└── README.md
 ```
 
 ## Example
 
 ```
 project_root/
-├─ src
+├── src
 │   └── app/
 │       ├── core/
 │       └── ui/
-└─ README.md # note
+└── README.md # note
 ```
 
 ## Commands

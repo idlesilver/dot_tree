@@ -2,7 +2,7 @@
   "name": "dottree",
   "displayName": "dottree",
   "description": "Maintain Tree files with automatic prefixes, syntax highlighting, and Enter/Tab helpers.",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "publisher": "idlesilver",
   "icon": "images/icon.png",
   "repository": {

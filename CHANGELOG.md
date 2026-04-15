@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.0.6
+- Change the default unicode output to standard 4-column `tree` formatting, such as `├──` and `│   `.
+- Update the starter snippet and README examples to use the same 4-column format.
+
 ## 0.0.5
 - Support tree prefixes with variable spaces or tabs, including standard `tree` output such as `│   └──`.
 - Improve Tree grammar matching for flexible unicode and ascii prefixes.
